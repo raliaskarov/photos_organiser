@@ -10,7 +10,8 @@ Dependencies:
   - pillow-heif (for HEIC support): pip install pillow-heif
 
 Usage:
-  python organize_photos.py --source "path/to/source" --dest "path/to/destination" [--move] [--heic-to-jpeg]
+  python organize_photos.py --source "path/to/source" --dest "path/to/destination"
+                            [--type photos|videos|both] [--move] [--heic-to-jpeg]
 """
 import os
 import sys
@@ -63,9 +64,22 @@ def get_creation_date(path):
     return datetime.fromtimestamp(mod_time)
 
 
-def organize_files(source_dir, dest_dir, move_files=False, convert_heic=False):
+def get_allowed_extensions(media_type):
     """
-    Walk through source_dir, find photos/videos, and copy (or move) into dest_dir organized by year/month.
+    Return the set of file extensions to process for the given media type:
+    'photos', 'videos', or 'both'.
+    """
+    if media_type == 'photos':
+        return IMAGE_EXTENSIONS
+    if media_type == 'videos':
+        return VIDEO_EXTENSIONS
+    return IMAGE_EXTENSIONS | VIDEO_EXTENSIONS
+
+
+def organize_files(source_dir, dest_dir, move_files=False, convert_heic=False, media_type='both'):
+    """
+    Walk through source_dir, find photos/videos (filtered by media_type), and copy
+    (or move) into dest_dir organized by year/month.
     Optionally convert HEIC files to JPEG stills.
     """
     if not os.path.isdir(source_dir):
@@ -76,12 +90,14 @@ def organize_files(source_dir, dest_dir, move_files=False, convert_heic=False):
         print("Error: pillow-heif is required for HEIC conversion. Install with 'pip install pillow-heif'.")
         sys.exit(1)
 
+    allowed_extensions = get_allowed_extensions(media_type)
+
     os.makedirs(dest_dir, exist_ok=True)
 
     for root, _, files in os.walk(source_dir):
         for filename in files:
             ext = os.path.splitext(filename)[1].lower()
-            if ext in IMAGE_EXTENSIONS or ext in VIDEO_EXTENSIONS:
+            if ext in allowed_extensions:
                 src_path = os.path.join(root, filename)
                 date = get_creation_date(src_path)
                 year = date.strftime('%Y')
@@ -139,6 +155,10 @@ if __name__ == '__main__':
         help="Destination base directory for organized files"
     )
     parser.add_argument(
+        '--type', '-t', dest='media_type', choices=['photos', 'videos', 'both'], default='both',
+        help="Which media to process: 'photos', 'videos', or 'both' (default: both)"
+    )
+    parser.add_argument(
         '--move', action='store_true',
         help="Move files instead of copying"
     )
@@ -148,4 +168,10 @@ if __name__ == '__main__':
     )
 
     args = parser.parse_args()
-    organize_files(args.source, args.dest, move_files=args.move, convert_heic=args.convert_heic)
+    organize_files(
+        args.source,
+        args.dest,
+        move_files=args.move,
+        convert_heic=args.convert_heic,
+        media_type=args.media_type,
+    )
